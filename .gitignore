@@ -1,0 +1,17 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary / Jupyter Checkpoints
+.ipynb_checkpoints/
+
+# Virtual Environments
+.venv/
+env/
+
+# Binary / Serialized assets (lourds et générés)
+*.pkl
+
+# VS Code settings
+.vscode/
