@@ -7,6 +7,7 @@ Author: Molecular Transcription Group
 import pickle
 import numpy as np
 from scipy.linalg import toeplitz
+from scipy.signal import savgol_filter
 
 
 def build_toeplitz_matrix(f_kernel):
@@ -80,3 +81,86 @@ def load_deconvolution_assets(filepath):
         assets['alpha_slope'],
         assets['dt'],
     )
+
+
+import numpy as np
+from scipy.linalg import toeplitz
+from scipy.signal import savgol_filter
+
+
+def compute_instantaneous_rate(
+    rfu_signal: np.ndarray,
+    f_kernel: np.ndarray,
+    alpha_slope: float,
+    dt_min: float,
+    lambda_reg: float = 0.5,
+    window_min: float = 50.0,
+    polyorder: int = 2,
+    mode: str = "nearest",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Calculates cumulative RNA mass and instantaneous transcription rate
+
+    via Tikhonov deconvolution and Savitzky-Golay filtered differentiation.
+
+    Parameters
+    ----------
+    rfu_signal : np.ndarray
+        Raw RFU signal for a specific well.
+    f_kernel : np.ndarray
+        Deconvolution impulse response kernel.
+    alpha_slope : float
+        Calibration slope (RFU to nM).
+    dt_min : float
+        Time step between cycles (in minutes).
+    lambda_reg : float, optional
+        Tikhonov regularization parameter (default is 0.5).
+    window_min : float, optional
+        Savitzky-Golay integration window size in minutes (default is 50.0).
+    polyorder : int, optional
+        Polynomial order for Savitzky-Golay filtering (default is 2).
+    mode : str, optional
+        Edge effect handling mode for Savitzky-Golay filtering (default is 'nearest').
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        - rna_cumulated (nM): Cumulative mass of RNA produced.
+        - rate (nM/min): Instantaneous transcription rate.
+    """
+    N = len(rfu_signal)
+
+    # 1. Normalization and zero-baseline alignment of the RFU signal
+    S_signal = (rfu_signal - rfu_signal[0]) / alpha_slope
+    S_signal = np.maximum(S_signal, 0.0)
+
+    # 2. Construction of the Toeplitz matrix F
+    col_1 = f_kernel[:N] / alpha_slope
+    row_1 = np.zeros(N)
+    row_1[0] = col_1[0]
+    F_well = toeplitz(col_1, row_1)
+
+    # 3. Tikhonov deconvolution
+    x_instant, _ = solve_tikhonov_deconvolution(
+        S_signal, F_well, dt=dt_min, lambda_reg=lambda_reg
+    )
+
+    # 4. Cumulative integration (RNA mass in nM)
+    rna_cumulated = np.cumsum(x_instant)
+
+    # 5. Smoothing window size computation
+    window_len = int(window_min / dt_min)
+    if window_len % 2 == 0:
+        window_len += 1
+
+    # 6. Savitzky-Golay differentiation (Instantaneous rate in nM/min)
+    rate = savgol_filter(
+        rna_cumulated,
+        window_length=window_len,
+        polyorder=polyorder,
+        deriv=1,
+        delta=dt_min,
+        mode=mode,
+    )
+    rate = np.maximum(rate, 0.0)
+
+    return rna_cumulated, rate
