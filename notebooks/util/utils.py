@@ -164,3 +164,46 @@ def compute_instantaneous_rate(
     rate = np.maximum(rate, 0.0)
 
     return rna_cumulated, rate
+
+
+def correct_transcription_rate(
+    time_vector: np.ndarray,
+    v_rate: np.ndarray,
+    k_inact: float,
+    k_inact_se: float | None = None,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Applies exponential inactivation correction to raw transcription rates and propagates uncertainty.
+
+    v_corr(t) = v(t) * exp(k_inact * t)
+    sigma_v_corr(t) = v(t) * t * exp(k_inact * t) * SE_k_inact
+
+    Parameters
+    ----------
+    time_vector : np.ndarray
+        Time points corresponding to the rate measurements (in minutes).
+    v_rate : np.ndarray
+        Raw or smoothed instantaneous transcription rates v(t) (in nM/min).
+    k_inact : float
+        First-order inactivation rate constant k_inact (in min^-1).
+    k_inact_se : float, optional
+        Standard error of k_inact. If provided, calculates propagated uncertainty (default is None).
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray | None]
+        - v_corr: Exponentially corrected transcription rates (nM/min).
+        - v_corr_err: Propagated standard error band on corrected rate (nM/min), or None if k_inact_se is None.
+    """
+    time_vector = np.asarray(time_vector)
+    v_rate = np.asarray(v_rate)
+
+    # 1. Exponential correction
+    correction_factor = np.exp(k_inact * time_vector)
+    v_corr = v_rate * correction_factor
+
+    # 2. Uncertainty propagation (if SE is provided)
+    v_corr_err = None
+    if k_inact_se is not None and k_inact_se > 0:
+        v_corr_err = v_rate * time_vector * correction_factor * k_inact_se
+
+    return v_corr, v_corr_err
