@@ -149,7 +149,7 @@ def compute_instantaneous_rate(
     lambda_reg: float = 0.5,
     window_min: float = 50.0,
     polyorder: int = 2,
-    mode: str = "nearest",
+    mode: str = "interp",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculate cumulative RNA mass and instantaneous transcription rate.
 
@@ -191,13 +191,11 @@ def compute_instantaneous_rate(
     N = len(rfu_signal)
 
     # --------------------------------------------------------------------------
-    # 1. Normalize RFU signal and align the baseline
+    # 1. Normalize RFU signal
     # --------------------------------------------------------------------------
     S_signal = (
         rfu_signal - rfu_signal[0]
     ) / alpha_slope
-
-    S_signal = np.maximum(S_signal, 0.0)
 
     # --------------------------------------------------------------------------
     # 2. Construct Toeplitz system matrix
